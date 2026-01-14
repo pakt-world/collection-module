@@ -1,0 +1,150 @@
+@import url("https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap");
+@import "./tailwind.css";
+
+@font-face {
+  font-family: "CircularStd";
+  src: url("../assets/fonts/CircularStd-Book.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "CircularStd";
+  src: url("../assets/fonts/CircularStd-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "CircularStd";
+  src: url("../assets/fonts/CircularStd-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+}
+
+:root {
+  --circular-std-font: "CircularStd", sans-serif;
+  --rubik-font: "Rubik", sans-serif;
+}
+
+* {
+  font-family: var(--circular-std-font);
+}
+
+.circular-std-light {
+  font-family: var(--circular-std-font);
+  font-weight: 300; /* Light */
+  font-style: normal;
+}
+
+.circular-std-regular {
+  font-family: var(--circular-std-font);
+  font-weight: 400; /* Regular */
+  font-style: normal;
+}
+
+.circular-std-medium {
+  font-family: var(--circular-std-font);
+  font-weight: 500; /* Medium */
+  font-style: normal;
+}
+
+.circular-std-bold {
+  font-family: var(--circular-std-font);
+  font-weight: 700; /* Bold */
+  font-style: normal;
+}
+
+.rubik-light {
+  font-family: var(--rubik-font);
+  font-optical-sizing: auto;
+  font-weight: 300;
+  font-style: normal;
+}
+
+.rubik-regular {
+  font-family: var(--rubik-font);
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.rubik-bold {
+  font-family: var(--rubik-font);
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* Input styles */
+@layer components {
+  .input_style {
+    @apply pka:!w-full pka:!px-4 pka:!py-3 pka:!border pka:!rounded-lg pka:!text-sm pka:!transition-colors;
+    background-color: var(--pkas-input-background);
+    border-color: var(--pkas-input-border);
+    color: var(--pkas-input-text);
+  }
+
+  .input_style::placeholder {
+    color: var(--pkas-input-placeholder);
+  }
+
+  .input_style:focus {
+    outline: none;
+    border-color: transparent;
+    box-shadow: 0 0 0 2px var(--pkas-input-focus-border);
+  }
+
+  .otp_style {
+    @apply pka:w-12 pka:h-12 pka:text-center pka:border pka:rounded-lg pka:text-lg pka:font-semibold pka:transition-colors;
+    width: 3rem !important;
+    background-color: var(--pkas-input-background);
+    border-color: var(--pkas-input-border);
+    color: var(--pkas-input-text);
+  }
+
+  @media (max-width: 424px) {
+    .otp_style {
+      width: 2.25rem !important;
+      height: 2.25rem !important;
+      font-size: 0.95rem;
+      padding: 0 !important;
+      box-sizing: border-box;
+    }
+  }
+
+  .otp_style:focus {
+    outline: none;
+    border-color: transparent;
+    box-shadow: 0 0 0 2px var(--pkas-input-focus-border);
+  }
+
+  /* Button theme tokens using background property for gradient support */
+  .pka\:bg-\[var\(--pkas-button-primary-background\)\] {
+    background: var(--pkas-button-primary-background);
+  }
+
+  .pka\:bg-\[var\(--pkas-button-outline-background\)\] {
+    background: var(--pkas-button-outline-background);
+  }
+
+  .pka\:bg-\[var\(--pkas-button-outline-hover-background\)\] {
+    background: var(--pkas-button-outline-hover-background);
+  }
+
+  .pka\:bg-\[var\(--pkas-button-primary-hover\)\] {
+    background: var(--pkas-button-primary-hover);
+  }
+
+  .pka\:bg-\[var\(--pkas-error-background\)\] {
+    background: var(--pkas-error-background);
+  }
+
+  .pka\:bg-\[var\(--pkas-button-disabled-background\)\] {
+    background: var(--pkas-button-disabled-background);
+  }
+
+  .pka\:text-\[var\(--pkas-button-disabled-text\)\] {
+    color: var(--pkas-button-disabled-text);
+  }
+}

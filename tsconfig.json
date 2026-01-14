@@ -1,0 +1,28 @@
+{
+    "compilerOptions": {
+        "target": "esnext",
+        "jsx": "react-jsx",
+        "module": "esnext",
+        "strict": true,
+        "downlevelIteration": true,
+        "moduleResolution": "bundler",
+        "allowSyntheticDefaultImports": true,
+        "isolatedModules": false,
+        "resolveJsonModule": true,
+        "experimentalDecorators": true,
+        "forceConsistentCasingInFileNames": true,
+        "declaration": true, 
+        "declarationDir": "dist",
+        "outDir": "./dist",
+        "emitDeclarationOnly": true,
+        "noImplicitAny": true, 
+        "baseUrl": "./src",
+        "paths": {
+            "@/*": ["src/*"]
+        },
+        "types": ["react", "react-dom"],
+        "skipLibCheck": true
+    },
+    "include": ["src/**/*", "rename-types.ts", "global.d.ts", ".eslintrc.js", "vite.config.ts", "tailwind.config.ts", "test"],
+    "exclude": ["node_modules", "dist"]
+}
