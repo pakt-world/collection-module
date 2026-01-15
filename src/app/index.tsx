@@ -44,9 +44,9 @@ const AppContent = () => {
     const countQuery = collectionsHook.getCountQuery;
     const [selectedCollectionId, setSelectedCollectionId] =
         useState<string>("");
-    const collectionByIdQuery = selectedCollectionId
-        ? collectionsHook.useCollectionById(selectedCollectionId)
-        : null;
+    const collectionByIdQuery = collectionsHook.useCollectionById(
+        selectedCollectionId || ""
+    );
 
     // Form states
     const [createPayload, setCreatePayload] = useState<string>("{}");
@@ -564,7 +564,7 @@ const AppContent = () => {
                                     <button
                                         type="button"
                                         onClick={handleGetCollectionById}
-                                        disabled={!authToken || !getByIdId}
+                                        disabled={!getByIdId}
                                         className="pka:rounded-lg pka:bg-blue-500 pka:px-4 pka:py-2 pka:font-semibold pka:text-white pka:transition-colors pka:hover:bg-blue-600 pka:disabled:opacity-50"
                                     >
                                         Get By ID

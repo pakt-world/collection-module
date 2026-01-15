@@ -20,7 +20,7 @@ import { getToken, getPaktSDK } from "../lib/pakt-sdk-helpers";
 
 export function useCollections(schemaReference: string) {
     const queryClient = useQueryClient();
-    const authToken = getToken();
+    const authToken = getToken() || "";
 
     /* -------------------- Queries -------------------- */
     const useCollectionsQuery = (filter?: filterCollectionStoreDto) =>
@@ -51,13 +51,18 @@ export function useCollections(schemaReference: string) {
 
     const useCollectionById = (id: string) =>
         useQuery({
-            queryKey: ["collection", schemaReference, id, authToken],
+            queryKey: [
+                "collection",
+                schemaReference,
+                id || "",
+                authToken || "",
+            ],
             queryFn: async (): Promise<ResponseDto<ICollectionStoreDto>> => {
                 const sdk = await getPaktSDK();
                 return await sdk.collectionStore.getById({
                     authToken: authToken || "",
                     schemaReference,
-                    id,
+                    id: id || "",
                 });
             },
             enabled: !!schemaReference && !!id,
