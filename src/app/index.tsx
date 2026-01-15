@@ -10,53 +10,43 @@ import { useState, useEffect } from "react";
 
 import Logger from "../lib/logger";
 import { PaktCollectionProvider } from "../components/pakt-collection/provider";
-import { usePaktCollection } from "../context/collection-context";
-import {
+import { useSchemas } from "../hooks/use-schemas";
+import { useCollections } from "../hooks/use-collections";
+import type {
     ICollectionSchemaDto,
     ICollectionStoreDto,
-    CollectionResponse,
-    FindCollectionSchemaDto,
-    FindCollectionStoreDto,
     CreateCollectionStoreDto,
     UpdateCollectionStoreDto,
 } from "../lib/pakt-sdk";
 
 const AppContent = () => {
-    const {
-        schemas,
-        selectedSchema,
-        collections,
-        collectionCount,
-        loading,
-        error,
-        getAllSchemas,
-        selectSchema,
-        getAllCollections,
-        getCollectionCount,
-        getCollectionById,
-        createCollection,
-        updateCollection,
-        deleteCollection,
-        clearError,
-        clearSelectedSchema,
-    } = usePaktCollection();
-
     const [authToken, setAuthToken] = useState<string>("");
     const [tokenInput, setTokenInput] = useState<string>("");
-    const [schemasResponse, setSchemasResponse] =
-        useState<CollectionResponse<FindCollectionSchemaDto> | null>(null);
-    const [collectionsResponse, setCollectionsResponse] =
-        useState<CollectionResponse<FindCollectionStoreDto> | null>(null);
-    const [countResponse, setCountResponse] =
-        useState<CollectionResponse<number> | null>(null);
-    const [createResponse, setCreateResponse] =
-        useState<CollectionResponse<ICollectionStoreDto> | null>(null);
-    const [updateResponse, setUpdateResponse] =
-        useState<CollectionResponse<ICollectionStoreDto> | null>(null);
-    const [deleteResponse, setDeleteResponse] =
-        useState<CollectionResponse<object> | null>(null);
-    const [getByIdResponse, setGetByIdResponse] =
-        useState<CollectionResponse<ICollectionStoreDto> | null>(null);
+    const [selectedSchema, setSelectedSchema] =
+        useState<ICollectionSchemaDto | null>(null);
+    const [filter] = useState<Record<string, unknown> | undefined>(undefined);
+
+    // Use React Query hooks
+    const {
+        useSchemasQuery,
+        useSchemaById,
+        createSchema,
+        updateSchema,
+        deleteSchema,
+    } = useSchemas();
+
+    const schemasQuery = useSchemasQuery(filter);
+
+    // Collections hook - always call hooks, but use enabled flag
+    const collectionsHook = useCollections(selectedSchema?.reference || "");
+
+    const collectionsQuery = collectionsHook.useCollectionsQuery(filter);
+    const countQuery = collectionsHook.getCountQuery;
+    const [selectedCollectionId, setSelectedCollectionId] =
+        useState<string>("");
+    const collectionByIdQuery = selectedCollectionId
+        ? collectionsHook.useCollectionById(selectedCollectionId)
+        : null;
 
     // Form states
     const [createPayload, setCreatePayload] = useState<string>("{}");
@@ -66,7 +56,7 @@ const AppContent = () => {
     const [getByIdId, setGetByIdId] = useState<string>("");
 
     useEffect(() => {
-        // Try to get token from localStorage or cookie
+        // Try to get token from localStorage
         const storedToken = localStorage.getItem("pakt_auth_token") || "";
         if (storedToken) {
             setAuthToken(storedToken);
@@ -77,66 +67,49 @@ const AppContent = () => {
         if (tokenInput.trim()) {
             setAuthToken(tokenInput.trim());
             localStorage.setItem("pakt_auth_token", tokenInput.trim());
+            // Refetch queries when token changes
+            schemasQuery.refetch().catch(() => {
+                // Error handling is done by React Query
+            });
         }
-    };
-
-    const handleLoadSchemas = async () => {
-        if (!authToken) {
-            // eslint-disable-next-line no-alert
-            alert("Please set an auth token first");
-            return;
-        }
-        const response = await getAllSchemas(authToken);
-        setSchemasResponse(response);
     };
 
     const handleSelectSchema = (schema: ICollectionSchemaDto) => {
-        selectSchema(schema);
-        if (authToken && schema.reference) {
-            getAllCollections(authToken, schema.reference)
-                .then((response) => {
-                    setCollectionsResponse(response);
-                })
-                .catch(() => {
-                    // Error handling is done in the hook
-                });
-            getCollectionCount(authToken, schema.reference)
-                .then((response) => {
-                    setCountResponse(response);
-                })
-                .catch(() => {
-                    // Error handling is done in the hook
-                });
-        }
+        setSelectedSchema(schema);
+        setSelectedCollectionId(""); // Reset selected collection
     };
 
-    const handleCreateCollection = async () => {
-        if (!authToken || !selectedSchema?.reference) {
+    const handleCreateCollection = () => {
+        if (!selectedSchema?.reference) {
             // eslint-disable-next-line no-alert
-            alert("Please set auth token and select a schema first");
+            alert("Please select a schema first");
             return;
         }
+
         try {
-            const payload = JSON.parse(createPayload);
-            const response = await createCollection(
-                authToken,
-                selectedSchema.reference,
-                payload
+            const payload = JSON.parse(createPayload) as Record<
+                string,
+                unknown
+            >;
+            collectionsHook.createCollection.mutate(
+                payload as CreateCollectionStoreDto,
+                {
+                    onSuccess: (response) => {
+                        Logger.info("Collection created:", response);
+                        setCreatePayload("{}");
+                    },
+                    onError: (error) => {
+                        // eslint-disable-next-line no-alert
+                        alert(
+                            `Failed to create collection: ${
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error)
+                            }`
+                        );
+                    },
+                }
             );
-            setCreateResponse(response);
-            // Refresh collections list
-            if (authToken && selectedSchema.reference) {
-                getAllCollections(authToken, selectedSchema.reference)
-                    .then((res) => setCollectionsResponse(res))
-                    .catch(() => {
-                        // Error handling is done in the hook
-                    });
-                getCollectionCount(authToken, selectedSchema.reference)
-                    .then((res) => setCountResponse(res))
-                    .catch(() => {
-                        // Error handling is done in the hook
-                    });
-            }
         } catch (err) {
             // eslint-disable-next-line no-alert
             alert(
@@ -147,31 +120,40 @@ const AppContent = () => {
         }
     };
 
-    const handleUpdateCollection = async () => {
-        if (!authToken || !selectedSchema?.reference || !updateId) {
+    const handleUpdateCollection = () => {
+        if (!selectedSchema?.reference || !updateId) {
             // eslint-disable-next-line no-alert
-            alert(
-                "Please set auth token, select a schema, and enter collection ID"
-            );
+            alert("Please select a schema and enter collection ID");
             return;
         }
+
         try {
-            const payload = JSON.parse(updatePayload);
-            const response = await updateCollection(
-                authToken,
-                selectedSchema.reference,
-                updateId,
-                payload
+            const payload = JSON.parse(updatePayload) as Record<
+                string,
+                unknown
+            >;
+            collectionsHook.updateCollection.mutate(
+                { id: updateId, payload },
+                {
+                    onSuccess: (response) => {
+                        Logger.info("Collection updated:", {
+                            response: response as Record<string, unknown>,
+                        });
+                        setUpdateId("");
+                        setUpdatePayload("{}");
+                    },
+                    onError: (error) => {
+                        // eslint-disable-next-line no-alert
+                        alert(
+                            `Failed to update collection: ${
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error)
+                            }`
+                        );
+                    },
+                }
             );
-            setUpdateResponse(response);
-            // Refresh collections list
-            if (authToken && selectedSchema.reference) {
-                getAllCollections(authToken, selectedSchema.reference)
-                    .then((res) => setCollectionsResponse(res))
-                    .catch(() => {
-                        // Error handling is done in the hook
-                    });
-            }
         } catch (err) {
             // eslint-disable-next-line no-alert
             alert(
@@ -182,50 +164,48 @@ const AppContent = () => {
         }
     };
 
-    const handleDeleteCollection = async () => {
-        if (!authToken || !selectedSchema?.reference || !deleteId) {
+    const handleDeleteCollection = () => {
+        if (!selectedSchema?.reference || !deleteId) {
             // eslint-disable-next-line no-alert
-            alert(
-                "Please set auth token, select a schema, and enter collection ID"
-            );
+            alert("Please select a schema and enter collection ID");
             return;
         }
-        const response = await deleteCollection(
-            authToken,
-            selectedSchema.reference,
-            deleteId
-        );
-        setDeleteResponse(response);
-        // Refresh collections list
-        if (authToken && selectedSchema.reference) {
-            getAllCollections(authToken, selectedSchema.reference)
-                .then((res) => setCollectionsResponse(res))
-                .catch(() => {
-                    // Error handling is done in the hook
-                });
-            getCollectionCount(authToken, selectedSchema.reference)
-                .then((res) => setCountResponse(res))
-                .catch(() => {
-                    // Error handling is done in the hook
-                });
-        }
+
+        collectionsHook.deleteCollection.mutate(deleteId, {
+            onSuccess: (response) => {
+                Logger.info("Collection deleted:", response);
+                setDeleteId("");
+            },
+            onError: (error) => {
+                // eslint-disable-next-line no-alert
+                alert(
+                    `Failed to delete collection: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`
+                );
+            },
+        });
     };
 
-    const handleGetCollectionById = async () => {
-        if (!authToken || !selectedSchema?.reference || !getByIdId) {
+    const handleGetCollectionById = () => {
+        if (!getByIdId) {
             // eslint-disable-next-line no-alert
-            alert(
-                "Please set auth token, select a schema, and enter collection ID"
-            );
+            alert("Please enter collection ID");
             return;
         }
-        const response = await getCollectionById(
-            authToken,
-            selectedSchema.reference,
-            getByIdId
-        );
-        setGetByIdResponse(response);
+        setSelectedCollectionId(getByIdId);
     };
+
+    // Extract schemas array from nested response structure
+    // ResponseDto<FindCollectionSchemaDto> -> FindCollectionSchemaDto.schemas -> ICollectionSchemaDto[]
+    // Response structure: { data: { schemas: [...], total, page, limit }, status, message, code }
+    // Note: API returns 'schemas' but type definition may say 'data', so we check both
+    const schemas =
+        (schemasQuery.data?.data as any)?.schemas ||
+        (schemasQuery.data?.data as any)?.data ||
+        null;
+    const collections = collectionsQuery?.data?.data?.data || null;
+    const collectionCount = countQuery?.data?.data || null;
 
     return (
         <div className="pka:min-h-screen pka:bg-gradient-to-br pka:from-blue-900 pka:via-purple-900 pka:to-indigo-900 pka:p-4">
@@ -236,6 +216,34 @@ const AppContent = () => {
                 <p className="pka:mb-8 pka:text-lg pka:text-gray-300 pka:text-center">
                     Manage collection schemas and collections
                 </p>
+
+                {/* Instructions */}
+                <div className="pka:mb-6 pka:rounded-lg pka:bg-blue-500/20 pka:border pka:border-blue-400 pka:p-4">
+                    <h3 className="pka:text-lg pka:font-semibold pka:mb-2">
+                        How to Test:
+                    </h3>
+                    <ol className="pka:list-decimal pka:list-inside pka:space-y-1 pka:text-sm pka:text-gray-200">
+                        <li>
+                            Enter your authentication token in the field below
+                        </li>
+                        <li>Click &quot;Set Token&quot; to save it</li>
+                        <li>
+                            Click &quot;Load Schemas&quot; to fetch available
+                            schemas
+                        </li>
+                        <li>Click on a schema to select it</li>
+                        <li>
+                            Once a schema is selected, you can:
+                            <ul className="pka:list-disc pka:list-inside pka:ml-4 pka:mt-1">
+                                <li>View collections (automatically loaded)</li>
+                                <li>Create new collections</li>
+                                <li>
+                                    Get, update, or delete collections by ID
+                                </li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
 
                 {/* Auth Token Input */}
                 <div className="pka:mb-6 pka:rounded-lg pka:bg-white/10 pka:p-4 pka:backdrop-blur-sm">
@@ -265,22 +273,33 @@ const AppContent = () => {
                     )}
                 </div>
 
-                {error && (
+                {/* Error Display */}
+                {schemasQuery.error && (
                     <div className="pka:mb-4 pka:rounded-lg pka:bg-red-500/20 pka:border pka:border-red-500 pka:p-4">
-                        <div className="pka:flex pka:items-center pka:justify-between">
-                            <p className="pka:text-red-200">{error}</p>
-                            <button
-                                type="button"
-                                onClick={clearError}
-                                className="pka:text-red-300 pka:hover:text-red-100"
-                            >
-                                ×
-                            </button>
-                        </div>
+                        <p className="pka:text-red-200">
+                            Schemas Error:{" "}
+                            {schemasQuery.error instanceof Error
+                                ? schemasQuery.error.message
+                                : String(schemasQuery.error)}
+                        </p>
                     </div>
                 )}
 
-                {loading && (
+                {collectionsQuery?.error && (
+                    <div className="pka:mb-4 pka:rounded-lg pka:bg-red-500/20 pka:border pka:border-red-500 pka:p-4">
+                        <p className="pka:text-red-200">
+                            Collections Error:{" "}
+                            {collectionsQuery.error instanceof Error
+                                ? collectionsQuery.error.message
+                                : String(collectionsQuery.error)}
+                        </p>
+                    </div>
+                )}
+
+                {/* Loading Indicator */}
+                {(schemasQuery.isLoading ||
+                    collectionsQuery?.isLoading ||
+                    countQuery?.isLoading) && (
                     <div className="pka:mb-4 pka:text-center pka:text-gray-300">
                         Loading...
                     </div>
@@ -294,27 +313,34 @@ const AppContent = () => {
                         </h2>
                         <button
                             type="button"
-                            onClick={handleLoadSchemas}
-                            disabled={!authToken || loading}
+                            onClick={() => schemasQuery.refetch()}
+                            disabled={!authToken || schemasQuery.isLoading}
                             className="pka:rounded-lg pka:bg-white pka:px-4 pka:py-2 pka:font-semibold pka:text-blue-900 pka:transition-colors pka:hover:bg-gray-100 pka:disabled:opacity-50"
                         >
                             Load Schemas
                         </button>
                     </div>
 
-                    {schemasResponse && (
+                    {schemasQuery.data && (
                         <div className="pka:rounded pka:p-3 pka:bg-white/5 pka:mb-4">
                             <div className="pka:mb-2 pka:font-semibold">
                                 Schemas API Response:
                             </div>
                             <pre className="pka:text-xs pka:text-gray-300 pka:overflow-auto pka:max-h-96 pka:bg-black/20 pka:p-3 pka:rounded">
-                                {JSON.stringify(schemasResponse, null, 2)}
+                                {JSON.stringify(schemasQuery.data, null, 2)}
                             </pre>
+                            <div className="pka:mt-2 pka:text-xs pka:text-gray-400">
+                                Found{" "}
+                                {schemas
+                                    ? `${schemas.length} schema(s)`
+                                    : "0 schemas"}
+                            </div>
                         </div>
                     )}
+
                     {schemas && schemas.length > 0 ? (
                         <div className="pka:space-y-2">
-                            {schemas.map((schema) => (
+                            {schemas.map((schema: ICollectionSchemaDto) => (
                                 <div
                                     key={schema._id}
                                     className={`pka:rounded pka:p-3 pka:cursor-pointer pka:transition-colors ${
@@ -348,17 +374,64 @@ const AppContent = () => {
                                 </div>
                             ))}
                         </div>
+                    ) : schemasQuery.isSuccess ? (
+                        schemas?.length === 0 ? (
+                            <div className="pka:rounded pka:p-4 pka:bg-yellow-500/20 pka:border pka:border-yellow-400">
+                                <p className="pka:text-yellow-200 pka:font-semibold">
+                                    No schemas found.
+                                </p>
+                                <p className="pka:text-yellow-300 pka:text-sm pka:mt-1">
+                                    Make sure your auth token is valid and you
+                                    have schemas created in your account.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="pka:rounded pka:p-4 pka:bg-orange-500/20 pka:border pka:border-orange-400">
+                                <p className="pka:text-orange-200 pka:font-semibold">
+                                    Response received but schemas array not
+                                    found
+                                </p>
+                                <p className="pka:text-orange-300 pka:text-sm pka:mt-1">
+                                    Check the response structure above. Expected
+                                    path: response.data.schemas
+                                </p>
+                            </div>
+                        )
+                    ) : schemasQuery.isError ? (
+                        <div className="pka:rounded pka:p-4 pka:bg-red-500/20 pka:border pka:border-red-400">
+                            <p className="pka:text-red-200 pka:font-semibold">
+                                Error loading schemas
+                            </p>
+                            <p className="pka:text-red-300 pka:text-sm pka:mt-1">
+                                Check your auth token and try again.
+                            </p>
+                        </div>
                     ) : (
-                        <p className="pka:text-gray-400">
-                            No schemas loaded. Click &quot;Load Schemas&quot; to
-                            fetch.
-                        </p>
+                        <div className="pka:rounded pka:p-4 pka:bg-gray-500/20 pka:border pka:border-gray-400">
+                            <p className="pka:text-gray-300">
+                                No schemas loaded. Click &quot;Load
+                                Schemas&quot; to fetch.
+                            </p>
+                            {!authToken && (
+                                <p className="pka:text-gray-400 pka:text-sm pka:mt-1">
+                                    ⚠️ Please set an auth token first
+                                </p>
+                            )}
+                        </div>
                     )}
                 </div>
 
                 {/* Collections Section */}
-                {selectedSchema && (
+                {selectedSchema ? (
                     <div className="pka:space-y-4">
+                        <div className="pka:rounded-lg pka:bg-green-500/20 pka:border pka:border-green-400 pka:p-4 pka:mb-4">
+                            <p className="pka:text-green-200 pka:font-semibold">
+                                ✓ Schema Selected: {selectedSchema.name}
+                            </p>
+                            <p className="pka:text-green-300 pka:text-sm pka:mt-1">
+                                Reference: {selectedSchema.reference}
+                            </p>
+                        </div>
                         <div className="pka:rounded-lg pka:bg-white/10 pka:p-6 pka:backdrop-blur-sm">
                             <div className="pka:flex pka:items-center pka:justify-between pka:mb-4">
                                 <h2 className="pka:text-2xl pka:font-semibold">
@@ -367,12 +440,47 @@ const AppContent = () => {
                                 </h2>
                                 <button
                                     type="button"
-                                    onClick={clearSelectedSchema}
+                                    onClick={() => {
+                                        setSelectedSchema(null);
+                                        setSelectedCollectionId("");
+                                    }}
                                     className="pka:rounded-lg pka:bg-red-500/20 pka:px-4 pka:py-2 pka:font-semibold pka:text-red-200 pka:transition-colors pka:hover:bg-red-500/30"
                                 >
                                     Clear Selection
                                 </button>
                             </div>
+
+                            {/* Collections Response */}
+                            {collectionsQuery?.data && (
+                                <div className="pka:mb-4 pka:p-4 pka:bg-white/5 pka:rounded">
+                                    <div className="pka:mb-2 pka:font-semibold">
+                                        GetAll Collections Response:
+                                    </div>
+                                    <pre className="pka:text-xs pka:text-gray-300 pka:overflow-auto pka:max-h-48 pka:bg-black/20 pka:p-2 pka:rounded">
+                                        {JSON.stringify(
+                                            collectionsQuery.data,
+                                            null,
+                                            2
+                                        )}
+                                    </pre>
+                                </div>
+                            )}
+
+                            {/* Collection Count Response */}
+                            {countQuery?.data && (
+                                <div className="pka:mb-4 pka:p-4 pka:bg-white/5 pka:rounded">
+                                    <div className="pka:mb-2 pka:font-semibold">
+                                        Collection Count Response:
+                                    </div>
+                                    <pre className="pka:text-xs pka:text-gray-300 pka:overflow-auto pka:max-h-48 pka:bg-black/20 pka:p-2 pka:rounded">
+                                        {JSON.stringify(
+                                            countQuery.data,
+                                            null,
+                                            2
+                                        )}
+                                    </pre>
+                                </div>
+                            )}
 
                             {/* Create Collection */}
                             <div className="pka:mb-4 pka:p-4 pka:bg-white/5 pka:rounded">
@@ -392,24 +500,48 @@ const AppContent = () => {
                                     <button
                                         type="button"
                                         onClick={handleCreateCollection}
-                                        disabled={!authToken || loading}
+                                        disabled={
+                                            !authToken ||
+                                            collectionsHook.createCollection
+                                                .isPending
+                                        }
                                         className="pka:rounded-lg pka:bg-green-500 pka:px-4 pka:py-2 pka:font-semibold pka:text-white pka:transition-colors pka:hover:bg-green-600 pka:disabled:opacity-50"
                                     >
-                                        Create Collection
+                                        {collectionsHook.createCollection
+                                            .isPending
+                                            ? "Creating..."
+                                            : "Create Collection"}
                                     </button>
                                 </div>
-                                {createResponse && (
+                                {collectionsHook.createCollection.data && (
                                     <div className="pka:mt-3">
                                         <div className="pka:mb-1 pka:font-semibold pka:text-sm">
                                             Create Response:
                                         </div>
                                         <pre className="pka:text-xs pka:text-gray-300 pka:overflow-auto pka:max-h-48 pka:bg-black/20 pka:p-2 pka:rounded">
-                                            {JSON.stringify(
-                                                createResponse,
-                                                null,
-                                                2
+                                            {String(
+                                                JSON.stringify(
+                                                    collectionsHook
+                                                        .createCollection
+                                                        .data as unknown,
+                                                    null,
+                                                    2
+                                                ) || ""
                                             )}
                                         </pre>
+                                    </div>
+                                )}
+                                {collectionsHook.createCollection.error && (
+                                    <div className="pka:mt-3 pka:text-red-300 pka:text-sm">
+                                        Error:{" "}
+                                        {collectionsHook.createCollection
+                                            .error instanceof Error
+                                            ? collectionsHook.createCollection
+                                                  .error.message
+                                            : String(
+                                                  collectionsHook
+                                                      .createCollection.error
+                                              )}
                                     </div>
                                 )}
                             </div>
@@ -432,24 +564,33 @@ const AppContent = () => {
                                     <button
                                         type="button"
                                         onClick={handleGetCollectionById}
-                                        disabled={!authToken || loading}
+                                        disabled={!authToken || !getByIdId}
                                         className="pka:rounded-lg pka:bg-blue-500 pka:px-4 pka:py-2 pka:font-semibold pka:text-white pka:transition-colors pka:hover:bg-blue-600 pka:disabled:opacity-50"
                                     >
                                         Get By ID
                                     </button>
                                 </div>
-                                {getByIdResponse && (
+                                {collectionByIdQuery?.data && (
                                     <div className="pka:mt-3">
                                         <div className="pka:mb-1 pka:font-semibold pka:text-sm">
                                             Get By ID Response:
                                         </div>
                                         <pre className="pka:text-xs pka:text-gray-300 pka:overflow-auto pka:max-h-48 pka:bg-black/20 pka:p-2 pka:rounded">
                                             {JSON.stringify(
-                                                getByIdResponse,
+                                                collectionByIdQuery.data,
                                                 null,
                                                 2
                                             )}
                                         </pre>
+                                    </div>
+                                )}
+                                {collectionByIdQuery?.error && (
+                                    <div className="pka:mt-3 pka:text-red-300 pka:text-sm">
+                                        Error:{" "}
+                                        {collectionByIdQuery.error instanceof
+                                        Error
+                                            ? collectionByIdQuery.error.message
+                                            : String(collectionByIdQuery.error)}
                                     </div>
                                 )}
                             </div>
@@ -481,24 +622,48 @@ const AppContent = () => {
                                     <button
                                         type="button"
                                         onClick={handleUpdateCollection}
-                                        disabled={!authToken || loading}
+                                        disabled={
+                                            !authToken ||
+                                            collectionsHook.updateCollection
+                                                .isPending
+                                        }
                                         className="pka:rounded-lg pka:bg-yellow-500 pka:px-4 pka:py-2 pka:font-semibold pka:text-white pka:transition-colors pka:hover:bg-yellow-600 pka:disabled:opacity-50"
                                     >
-                                        Update Collection
+                                        {collectionsHook.updateCollection
+                                            .isPending
+                                            ? "Updating..."
+                                            : "Update Collection"}
                                     </button>
                                 </div>
-                                {updateResponse && (
+                                {collectionsHook.updateCollection.data ? (
                                     <div className="pka:mt-3">
                                         <div className="pka:mb-1 pka:font-semibold pka:text-sm">
                                             Update Response:
                                         </div>
                                         <pre className="pka:text-xs pka:text-gray-300 pka:overflow-auto pka:max-h-48 pka:bg-black/20 pka:p-2 pka:rounded">
-                                            {JSON.stringify(
-                                                updateResponse,
-                                                null,
-                                                2
+                                            {String(
+                                                JSON.stringify(
+                                                    collectionsHook
+                                                        .updateCollection
+                                                        .data as unknown,
+                                                    null,
+                                                    2
+                                                ) ?? ""
                                             )}
                                         </pre>
+                                    </div>
+                                ) : null}
+                                {collectionsHook.updateCollection.error && (
+                                    <div className="pka:mt-3 pka:text-red-300 pka:text-sm">
+                                        Error:{" "}
+                                        {collectionsHook.updateCollection
+                                            .error instanceof Error
+                                            ? collectionsHook.updateCollection
+                                                  .error.message
+                                            : String(
+                                                  collectionsHook
+                                                      .updateCollection.error
+                                              )}
                                     </div>
                                 )}
                             </div>
@@ -521,101 +686,54 @@ const AppContent = () => {
                                     <button
                                         type="button"
                                         onClick={handleDeleteCollection}
-                                        disabled={!authToken || loading}
+                                        disabled={
+                                            !authToken ||
+                                            collectionsHook.deleteCollection
+                                                .isPending
+                                        }
                                         className="pka:rounded-lg pka:bg-red-500 pka:px-4 pka:py-2 pka:font-semibold pka:text-white pka:transition-colors pka:hover:bg-red-600 pka:disabled:opacity-50"
                                     >
-                                        Delete Collection
+                                        {collectionsHook.deleteCollection
+                                            .isPending
+                                            ? "Deleting..."
+                                            : "Delete Collection"}
                                     </button>
                                 </div>
-                                {deleteResponse && (
+                                {collectionsHook.deleteCollection.data && (
                                     <div className="pka:mt-3">
                                         <div className="pka:mb-1 pka:font-semibold pka:text-sm">
                                             Delete Response:
                                         </div>
                                         <pre className="pka:text-xs pka:text-gray-300 pka:overflow-auto pka:max-h-48 pka:bg-black/20 pka:p-2 pka:rounded">
-                                            {JSON.stringify(
-                                                deleteResponse,
-                                                null,
-                                                2
+                                            {String(
+                                                JSON.stringify(
+                                                    collectionsHook
+                                                        .deleteCollection
+                                                        .data as unknown,
+                                                    null,
+                                                    2
+                                                ) || ""
                                             )}
                                         </pre>
                                     </div>
                                 )}
+                                {collectionsHook.deleteCollection.error && (
+                                    <div className="pka:mt-3 pka:text-red-300 pka:text-sm">
+                                        Error:{" "}
+                                        {collectionsHook.deleteCollection
+                                            .error instanceof Error
+                                            ? collectionsHook.deleteCollection
+                                                  .error.message
+                                            : String(
+                                                  collectionsHook
+                                                      .deleteCollection.error
+                                              )}
+                                    </div>
+                                )}
                             </div>
                         </div>
-
-                        {/* Collections Response */}
-                        {collectionsResponse && (
-                            <div className="pka:rounded-lg pka:bg-white/10 pka:p-6 pka:backdrop-blur-sm">
-                                <h2 className="pka:text-2xl pka:font-semibold pka:mb-4">
-                                    GetAll Collections Response
-                                </h2>
-                                <pre className="pka:text-xs pka:text-gray-300 pka:overflow-auto pka:max-h-96 pka:bg-black/20 pka:p-3 pka:rounded">
-                                    {JSON.stringify(
-                                        collectionsResponse,
-                                        null,
-                                        2
-                                    )}
-                                </pre>
-                            </div>
-                        )}
-
-                        {/* Collection Count Response */}
-                        {countResponse && (
-                            <div className="pka:rounded-lg pka:bg-white/10 pka:p-6 pka:backdrop-blur-sm">
-                                <h2 className="pka:text-2xl pka:font-semibold pka:mb-4">
-                                    Collection Count Response
-                                </h2>
-                                <pre className="pka:text-xs pka:text-gray-300 pka:overflow-auto pka:max-h-96 pka:bg-black/20 pka:p-3 pka:rounded">
-                                    {JSON.stringify(countResponse, null, 2)}
-                                </pre>
-                            </div>
-                        )}
-
-                        {/* Legacy Collections Display (if no response yet) */}
-                        {!collectionsResponse &&
-                            collections &&
-                            collections.data &&
-                            collections.data.length > 0 && (
-                                <div className="pka:rounded-lg pka:bg-white/10 pka:p-6 pka:backdrop-blur-sm">
-                                    <div className="pka:flex pka:items-center pka:justify-between pka:mb-4">
-                                        <h2 className="pka:text-2xl pka:font-semibold">
-                                            Collections ({selectedSchema.name})
-                                        </h2>
-                                        {collectionCount !== null && (
-                                            <span className="pka:text-gray-300">
-                                                Total: {collectionCount}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="pka:space-y-2">
-                                        {collections.data.map(
-                                            (
-                                                collection: ICollectionStoreDto
-                                            ) => (
-                                                <div
-                                                    key={collection._id}
-                                                    className="pka:rounded pka:p-3 pka:bg-white/5"
-                                                >
-                                                    <div className="pka:font-semibold">
-                                                        Collection ID:{" "}
-                                                        {collection._id}
-                                                    </div>
-                                                    <pre className="pka:text-xs pka:text-gray-300 pka:mt-1 pka:overflow-auto">
-                                                        {JSON.stringify(
-                                                            collection,
-                                                            null,
-                                                            2
-                                                        )}
-                                                    </pre>
-                                                </div>
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-                            )}
                     </div>
-                )}
+                ) : null}
             </div>
         </div>
     );

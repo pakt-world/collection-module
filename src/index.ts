@@ -1,11 +1,12 @@
 // PaktCollectionProvider
 export { PaktCollectionProvider } from "./components/pakt-collection/provider";
 
-// Collection hook - Context-based hook (recommended)
-export { usePaktCollection } from "./context/collection-context";
-
 // Internal hook for direct usage (advanced use cases)
 export { usePaktCollectionInternal } from "./hooks/use-pakt-collection";
+
+// React Query hooks
+export { useCollections } from "./hooks/use-collections";
+export { useSchemas } from "./hooks/use-schemas";
 
 // Collection types
 export type {

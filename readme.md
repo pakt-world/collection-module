@@ -1,33 +1,38 @@
 # @pakt/collection-module
 
-A comprehensive React collection management module for Pakt applications. This package provides a complete solution for managing collection schemas and collections with full CRUD operations, filtering, and state management.
+A comprehensive React collection management module for Pakt applications. This package provides a complete solution for managing collection schemas and collections with full CRUD operations, filtering, and state management using React Query.
 
 ## Features
 
+- **React Query Integration**: Built on `@tanstack/react-query` for powerful caching, synchronization, and state management
 - **Collection Schema Management**: Create, read, update, and delete collection schemas
 - **Collection Store Management**: Full CRUD operations for collections within schemas
-- **State Management**: Built-in Zustand store for persistent state management
+- **Automatic Cache Management**: React Query handles cache invalidation and refetching automatically
 - **TypeScript Support**: Full type definitions included
 - **Filtering & Pagination**: Built-in support for filtering and querying collections
 - **Error Handling**: Comprehensive error handling with user-friendly messages
-- **Loading States**: Built-in loading state management
+- **Loading States**: Built-in loading state management via React Query
 - **Customizable UI**: Theme customization support
 
 ## Installation
 
 ```bash
-yarn add @pakt/collection-module
+yarn add @pakt/collection-module @tanstack/react-query
 # or
-npm install @pakt/collection-module
+npm install @pakt/collection-module @tanstack/react-query
 # or
-bun add @pakt/collection-module
+bun add @pakt/collection-module @tanstack/react-query
 ```
+
+**Note**: `@tanstack/react-query` is a peer dependency and must be installed separately.
 
 ## Quick Start
 
+### Using React Query Hooks (Recommended)
+
 ```typescript
 import React from 'react';
-import { PaktCollectionProvider, usePaktCollection } from '@pakt/collection-module';
+import { PaktCollectionProvider, useCollections, useSchemas } from '@pakt/collection-module';
 import '@pakt/collection-module/dist/styles.css';
 
 function App() {
@@ -44,33 +49,46 @@ function App() {
 }
 
 function CollectionDemo() {
-  const {
-    schemas,
-    collections,
-    loading,
-    error,
-    getAllSchemas,
-    getAllCollections,
-    createCollection,
-  } = usePaktCollection();
+  const schemaReference = "person-profile"; // Your schema reference
+  
+  // Use React Query hooks
+  const { useSchemasQuery } = useSchemas();
+  const { useCollectionsQuery, createCollection, updateCollection, deleteCollection } = useCollections(schemaReference);
 
-  const authToken = "your-auth-token";
+  const schemasQuery = useSchemasQuery();
+  const collectionsQuery = useCollectionsQuery();
 
-  // Load schemas
-  React.useEffect(() => {
-    getAllSchemas(authToken);
-  }, []);
+  // Access data, loading, and error states
+  const schemas = schemasQuery.data?.data?.schemas || [];
+  const collections = collectionsQuery.data?.data?.data || [];
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  if (schemasQuery.isLoading) return <div>Loading schemas...</div>;
+  if (collectionsQuery.isLoading) return <div>Loading collections...</div>;
+  if (schemasQuery.error) return <div>Error: {schemasQuery.error.message}</div>;
+
+  const handleCreate = () => {
+    createCollection.mutate({
+      firstName: "John",
+      email: "john@example.com",
+      // ... other fields
+    });
+  };
 
   return (
     <div>
-      <h1>Collection Schemas</h1>
-      {schemas?.map(schema => (
+      <h1>Schemas</h1>
+      {schemas.map(schema => (
         <div key={schema._id}>
           <h2>{schema.name}</h2>
           <p>{schema.description}</p>
+        </div>
+      ))}
+
+      <h1>Collections</h1>
+      <button onClick={handleCreate}>Create Collection</button>
+      {collections.map(collection => (
+        <div key={collection._id}>
+          {/* Render collection data */}
         </div>
       ))}
     </div>
@@ -147,6 +165,326 @@ const config: ConfigContextType = {
 };
 ```
 
+## React Query Hooks
+
+### useSchemas Hook
+
+The `useSchemas` hook provides React Query hooks for schema operations:
+
+```typescript
+import { useSchemas } from '@pakt/collection-module';
+
+function MyComponent() {
+  const {
+    useSchemasQuery,      // Query hook for fetching schemas
+    useSchemaById,        // Query hook for fetching a single schema
+    createSchema,         // Mutation for creating a schema
+    updateSchema,         // Mutation for updating a schema
+    deleteSchema,         // Mutation for deleting a schema
+  } = useSchemas();
+
+  // Use the query hook
+  const schemasQuery = useSchemasQuery({ limit: 10 });
+  
+  // Access data, loading, and error states
+  const schemas = schemasQuery.data?.data?.schemas || [];
+  const isLoading = schemasQuery.isLoading;
+  const error = schemasQuery.error;
+
+  // Use mutations
+  const handleCreate = () => {
+    createSchema.mutate({
+      name: "My Schema",
+      reference: "my-schema",
+      description: "Schema description",
+    }, {
+      onSuccess: (data) => {
+        console.log("Schema created:", data);
+      },
+      onError: (error) => {
+        console.error("Error:", error);
+      },
+    });
+  };
+
+  return (
+    <div>
+      {isLoading && <div>Loading...</div>}
+      {error && <div>Error: {error.message}</div>}
+      {schemas.map(schema => (
+        <div key={schema._id}>{schema.name}</div>
+      ))}
+      <button onClick={handleCreate}>Create Schema</button>
+    </div>
+  );
+}
+```
+
+### useCollections Hook
+
+The `useCollections` hook provides React Query hooks for collection operations. It requires a `schemaReference` parameter:
+
+```typescript
+import { useCollections } from '@pakt/collection-module';
+
+function MyComponent() {
+  const schemaReference = "person-profile";
+  
+  const {
+    useCollectionsQuery,  // Query hook for fetching collections
+    getCountQuery,        // Query hook for fetching collection count
+    useCollectionById,    // Query hook for fetching a single collection
+    createCollection,     // Mutation for creating a collection
+    updateCollection,     // Mutation for updating a collection
+    deleteCollection,     // Mutation for deleting a collection
+  } = useCollections(schemaReference);
+
+  // Use query hooks
+  const collectionsQuery = useCollectionsQuery({ limit: 20 });
+  const countQuery = getCountQuery;
+  const singleCollectionQuery = useCollectionById("collection-id");
+
+  // Access data
+  const collections = collectionsQuery.data?.data?.data || [];
+  const count = countQuery.data?.data || 0;
+
+  // Use mutations
+  const handleCreate = () => {
+    createCollection.mutate({
+      firstName: "John",
+      email: "john@example.com",
+      dateOfBirth: "1990-01-01",
+    }, {
+      onSuccess: () => {
+        // Cache is automatically invalidated and refetched
+        console.log("Collection created!");
+      },
+    });
+  };
+
+  const handleUpdate = (id: string) => {
+    updateCollection.mutate({
+      id,
+      payload: {
+        firstName: "Jane",
+      },
+    });
+  };
+
+  const handleDelete = (id: string) => {
+    deleteCollection.mutate(id, {
+      onSuccess: () => {
+        console.log("Collection deleted!");
+      },
+    });
+  };
+
+  return (
+    <div>
+      <p>Total collections: {count}</p>
+      {collections.map(collection => (
+        <div key={collection._id}>
+          <button onClick={() => handleUpdate(collection._id)}>Update</button>
+          <button onClick={() => handleDelete(collection._id)}>Delete</button>
+        </div>
+      ))}
+      <button onClick={handleCreate}>Create Collection</button>
+    </div>
+  );
+}
+```
+
+## Hook API Reference
+
+### useSchemas()
+
+Returns React Query hooks and mutations for schema operations.
+
+**Returns:**
+
+```typescript
+{
+  useSchemasQuery: (filter?: filterCollectionSchemaDto) => UseQueryResult<ResponseDto<FindCollectionSchemaDto>>;
+  useSchemaById: (id: string) => UseQueryResult<ResponseDto<ICollectionSchemaDto>>;
+  createSchema: UseMutationResult<ResponseDto<ICollectionSchemaDto>, Error, CreateCollectionSchemaDto>;
+  updateSchema: UseMutationResult<ResponseDto<ICollectionSchemaDto>, Error, { id: string; payload: UpdateCollectionSchemaDto }>;
+  deleteSchema: UseMutationResult<ResponseDto<object>, Error, string>;
+}
+```
+
+### useCollections(schemaReference: string)
+
+Returns React Query hooks and mutations for collection operations.
+
+**Parameters:**
+
+- `schemaReference` (string, required): The reference of the schema to work with
+
+**Returns:**
+
+```typescript
+{
+  useCollectionsQuery: (filter?: filterCollectionStoreDto) => UseQueryResult<ResponseDto<FindCollectionStoreDto>>;
+  getCountQuery: UseQueryResult<ResponseDto<number>>;
+  useCollectionById: (id: string) => UseQueryResult<ResponseDto<ICollectionStoreDto>>;
+  createCollection: UseMutationResult<ResponseDto<ICollectionStoreDto>, Error, CreateCollectionStoreDto>;
+  updateCollection: UseMutationResult<ResponseDto<ICollectionStoreDto>, Error, { id: string; payload: UpdateCollectionStoreDto }>;
+  deleteCollection: UseMutationResult<ResponseDto<object>, Error, string>;
+}
+```
+
+## Usage Examples
+
+### Complete Example with React Query
+
+```typescript
+import React, { useState } from 'react';
+import { PaktCollectionProvider, useSchemas, useCollections } from '@pakt/collection-module';
+
+function App() {
+  return (
+    <PaktCollectionProvider
+      config={{
+        baseUrl: "https://api-devpaktbuild.chain.site",
+        verbose: true,
+      }}
+    >
+      <CollectionManager />
+    </PaktCollectionProvider>
+  );
+}
+
+function CollectionManager() {
+  const [selectedSchemaRef, setSelectedSchemaRef] = useState<string>("");
+
+  const { useSchemasQuery, createSchema } = useSchemas();
+  const schemasQuery = useSchemasQuery();
+
+  const schemas = schemasQuery.data?.data?.schemas || [];
+
+  return (
+    <div>
+      <h1>Schemas</h1>
+      {schemas.map(schema => (
+        <div
+          key={schema._id}
+          onClick={() => setSelectedSchemaRef(schema.reference)}
+        >
+          <h2>{schema.name}</h2>
+          <p>{schema.description}</p>
+        </div>
+      ))}
+
+      {selectedSchemaRef && (
+        <CollectionList schemaReference={selectedSchemaRef} />
+      )}
+    </div>
+  );
+}
+
+function CollectionList({ schemaReference }: { schemaReference: string }) {
+  const {
+    useCollectionsQuery,
+    getCountQuery,
+    createCollection,
+    updateCollection,
+    deleteCollection,
+  } = useCollections(schemaReference);
+
+  const collectionsQuery = useCollectionsQuery();
+  const countQuery = getCountQuery;
+
+  const collections = collectionsQuery.data?.data?.data || [];
+  const count = countQuery.data?.data || 0;
+
+  const handleCreate = () => {
+    createCollection.mutate({
+      // Your collection data based on schema
+      field1: "value1",
+      field2: "value2",
+    });
+  };
+
+  return (
+    <div>
+      <h2>Collections ({count})</h2>
+      <button onClick={handleCreate}>Create Collection</button>
+      
+      {collectionsQuery.isLoading && <div>Loading...</div>}
+      {collectionsQuery.error && (
+        <div>Error: {collectionsQuery.error.message}</div>
+      )}
+
+      {collections.map(collection => (
+        <div key={collection._id}>
+          <pre>{JSON.stringify(collection, null, 2)}</pre>
+          <button
+            onClick={() => updateCollection.mutate({
+              id: collection._id,
+              payload: { field1: "updated" },
+            })}
+          >
+            Update
+          </button>
+          <button
+            onClick={() => deleteCollection.mutate(collection._id)}
+          >
+            Delete
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Authentication Token Management
+
+The hooks automatically read the authentication token from `localStorage` using the key `pakt_auth_token`. Set the token before using the hooks:
+
+```typescript
+// Set the token
+localStorage.setItem("pakt_auth_token", "your-auth-token");
+
+// The hooks will automatically use this token
+const { useSchemasQuery } = useSchemas();
+const schemasQuery = useSchemasQuery();
+```
+
+### Query Filtering
+
+Both hooks support filtering:
+
+```typescript
+// Filter schemas
+const schemasQuery = useSchemasQuery({
+  limit: 10,
+  page: 1,
+});
+
+// Filter collections
+const collectionsQuery = useCollectionsQuery({
+  limit: 20,
+  offset: 0,
+});
+```
+
+### Cache Management
+
+React Query automatically manages cache invalidation. When mutations succeed, related queries are automatically invalidated and refetched:
+
+```typescript
+const { createCollection } = useCollections(schemaReference);
+
+// After this mutation succeeds, all collection queries are automatically refetched
+createCollection.mutate(payload, {
+  onSuccess: () => {
+    // Cache is already invalidated and refetched automatically
+    console.log("Done!");
+  },
+});
+```
+
 ## Component Props
 
 ### PaktCollectionProvider Props
@@ -164,383 +502,14 @@ interface PaktCollectionProps {
 }
 ```
 
-### Text Configuration
-
-Customize the text displayed in collection components:
-
-```typescript
-interface CollectionTextConfig {
-  title?: string;        // Title for collection components
-  description?: string;  // Description for collection components
-}
-```
-
-## Using the Hook
-
-The `usePaktCollection` hook provides everything you need for collection management:
-
-```typescript
-import { usePaktCollection } from '@pakt/collection-module';
-
-function MyComponent() {
-  const { 
-    // State
-    schemas,                    // Array of collection schemas
-    selectedSchema,            // Currently selected schema
-    collections,               // Collections data
-    collectionCount,           // Total collection count
-    loading,                   // Loading state
-    error,                     // Error message
-    
-    // Schema Methods
-    getAllSchemas,             // Fetch all schemas
-    getSchemaById,             // Get schema by ID
-    selectSchema,              // Select a schema
-    createSchema,              // Create a new schema
-    updateSchema,              // Update a schema
-    deleteSchema,              // Delete a schema
-    
-    // Collection Methods
-    getAllCollections,         // Fetch all collections for a schema
-    getCollectionById,         // Get collection by ID
-    getCollectionCount,         // Get collection count
-    createCollection,          // Create a new collection
-    updateCollection,           // Update a collection
-    deleteCollection,           // Delete a collection
-    
-    // Utility Methods
-    clearError,                // Clear error state
-    clearSelectedSchema,        // Clear selected schema
-  } = usePaktCollection();
-
-  // Your component logic here
-}
-```
-
-## API Methods
-
-### Collection Schema Methods
-
-#### getAllSchemas
-
-Fetch all collection schemas with optional filtering:
-
-```typescript
-const response = await getAllSchemas(
-  authToken: string,
-  filter?: filterCollectionSchemaDto
-);
-```
-
-**Example:**
-
-```typescript
-const response = await getAllSchemas(authToken, {
-  limit: 10,
-  offset: 0,
-  // ... other filter options
-});
-```
-
-#### getSchemaById
-
-Get a specific schema by ID:
-
-```typescript
-const response = await getSchemaById(
-  authToken: string,
-  id: string
-);
-```
-
-#### createSchema
-
-Create a new collection schema:
-
-```typescript
-const response = await createSchema({
-  name: "My Collection Schema",
-  reference: "my-collection-schema",
-  description: "Description of the schema",
-  // ... other schema fields
-});
-```
-
-#### updateSchema
-
-Update an existing schema:
-
-```typescript
-const response = await updateSchema(schemaId, {
-  name: "Updated Name",
-  description: "Updated description",
-  // ... other fields to update
-});
-```
-
-#### deleteSchema
-
-Delete a schema:
-
-```typescript
-const response = await deleteSchema(schemaId);
-```
-
-### Collection Store Methods
-
-#### getAllCollections
-
-Fetch all collections for a specific schema:
-
-```typescript
-const response = await getAllCollections(
-  authToken: string,
-  schemaReference: string,
-  filter?: filterCollectionStoreDto
-);
-```
-
-**Example:**
-
-```typescript
-const response = await getAllCollections(
-  authToken,
-  "my-collection-schema",
-  {
-    limit: 20,
-    offset: 0,
-  }
-);
-```
-
-#### getCollectionById
-
-Get a specific collection by ID:
-
-```typescript
-const response = await getCollectionById(
-  authToken: string,
-  schemaReference: string,
-  id: string
-);
-```
-
-#### getCollectionCount
-
-Get the total count of collections for a schema:
-
-```typescript
-const response = await getCollectionCount(
-  authToken: string,
-  schemaReference: string,
-  filter?: filterCollectionStoreDto
-);
-```
-
-#### createCollection
-
-Create a new collection:
-
-```typescript
-const response = await createCollection(
-  authToken: string,
-  schemaReference: string,
-  {
-    // Collection data matching the schema fields
-    field1: "value1",
-    field2: "value2",
-  }
-);
-```
-
-#### updateCollection
-
-Update an existing collection:
-
-```typescript
-const response = await updateCollection(
-  authToken: string,
-  schemaReference: string,
-  collectionId: string,
-  {
-    // Fields to update
-    field1: "new value",
-  }
-);
-```
-
-#### deleteCollection
-
-Delete a collection:
-
-```typescript
-const response = await deleteCollection(
-  authToken: string,
-  schemaReference: string,
-  collectionId: string
-);
-```
-
-## Usage Examples
-
-### Basic Implementation
-
-```typescript
-import React, { useEffect } from 'react';
-import { PaktCollectionProvider, usePaktCollection } from '@pakt/collection-module';
-
-function App() {
-  const config = {
-    baseUrl: "https://api-devpaktbuild.chain.site",
-    verbose: true,
-  };
-
-  return (
-    <PaktCollectionProvider config={config}>
-      <CollectionManager />
-    </PaktCollectionProvider>
-  );
-}
-
-function CollectionManager() {
-  const {
-    schemas,
-    collections,
-    loading,
-    error,
-    getAllSchemas,
-    selectSchema,
-    getAllCollections,
-    createCollection,
-  } = usePaktCollection();
-
-  const authToken = "your-auth-token";
-
-  useEffect(() => {
-    getAllSchemas(authToken);
-  }, []);
-
-  const handleSchemaSelect = async (schema: ICollectionSchemaDto) => {
-    selectSchema(schema);
-    if (schema.reference) {
-      await getAllCollections(authToken, schema.reference);
-    }
-  };
-
-  const handleCreateCollection = async () => {
-    if (!selectedSchema?.reference) return;
-    
-    await createCollection(authToken, selectedSchema.reference, {
-      // Your collection data
-      title: "New Collection",
-      description: "Collection description",
-    });
-  };
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
-
-  return (
-    <div>
-      <h1>Collection Schemas</h1>
-      {schemas?.map(schema => (
-        <div key={schema._id} onClick={() => handleSchemaSelect(schema)}>
-          <h2>{schema.name}</h2>
-          <p>{schema.description}</p>
-        </div>
-      ))}
-
-      {selectedSchema && (
-        <div>
-          <h2>Collections for {selectedSchema.name}</h2>
-          <button onClick={handleCreateCollection}>Create Collection</button>
-          {collections?.data?.map(collection => (
-            <div key={collection._id}>
-              {/* Render collection data */}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-```
-
-### With Callbacks
-
-```typescript
-import React from 'react';
-import { PaktCollectionProvider } from '@pakt/collection-module';
-
-function App() {
-  const config = {
-    baseUrl: "https://api-devpaktbuild.chain.site",
-  };
-
-  return (
-    <PaktCollectionProvider
-      config={config}
-      onSchemaCreated={(schema) => {
-        console.log("Schema created:", schema);
-        // Handle schema creation
-      }}
-      onCollectionCreated={(collection) => {
-        console.log("Collection created:", collection);
-        // Handle collection creation
-      }}
-      onCollectionUpdated={(collection) => {
-        console.log("Collection updated:", collection);
-        // Handle collection update
-      }}
-      onCollectionDeleted={(collectionId) => {
-        console.log("Collection deleted:", collectionId);
-        // Handle collection deletion
-      }}
-    >
-      {/* Your app */}
-    </PaktCollectionProvider>
-  );
-}
-```
-
-### Error Handling
-
-```typescript
-import { usePaktCollection } from '@pakt/collection-module';
-
-function MyComponent() {
-  const { error, clearError, getAllSchemas } = usePaktCollection();
-
-  useEffect(() => {
-    if (error) {
-      // Handle error (show toast, log, etc.)
-      console.error("Collection error:", error);
-      
-      // Clear error after handling
-      setTimeout(() => clearError(), 5000);
-    }
-  }, [error]);
-
-  return (
-    <div>
-      {error && (
-        <div className="error-message">
-          {error}
-          <button onClick={clearError}>Dismiss</button>
-        </div>
-      )}
-      {/* Rest of component */}
-    </div>
-  );
-}
-```
+**Note**: The `PaktCollectionProvider` automatically includes a `QueryClientProvider` with a pre-configured `QueryClient`, so you don't need to set up React Query yourself. Just wrap your app with `PaktCollectionProvider` and start using the hooks!
 
 ## Response Format
 
-All methods return a `CollectionResponse<T>` object:
+All methods return a `ResponseDto<T>` object:
 
 ```typescript
-interface CollectionResponse<T> {
+interface ResponseDto<T> {
   status: "success" | "error";
   message: string;
   data: T;
@@ -549,20 +518,35 @@ interface CollectionResponse<T> {
 }
 ```
 
-**Example Response:**
+**Schema Response Example:**
 
 ```typescript
 {
   status: "success",
-  message: "Collections retrieved successfully",
+  message: "OK",
+  data: {
+    schemas: [...],
+    total: 1,
+    page: 1,
+    limit: 12
+  },
+  code: 200
+}
+```
+
+**Collection Response Example:**
+
+```typescript
+{
+  status: "success",
+  message: "OK",
   data: {
     data: [...collections],
     total: 100,
-    limit: 20,
-    offset: 0,
+    page: 1,
+    limit: 20
   },
-  statusCode: 200,
-  code: 200,
+  code: 200
 }
 ```
 
@@ -576,20 +560,34 @@ interface ICollectionSchemaDto {
   name: string;
   reference: string;
   description?: string;
-  // ... other schema fields
+  schema: SchemaField[];
+  access: {
+    read: string;
+    write: string;
+  };
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface CreateCollectionSchemaDto {
   name: string;
   reference: string;
   description?: string;
-  // ... other fields
+  schema: SchemaField[];
+  access?: {
+    read: string;
+    write: string;
+  };
 }
 
 interface UpdateCollectionSchemaDto {
   name?: string;
   description?: string;
-  // ... other updatable fields
+  schema?: SchemaField[];
+  access?: {
+    read?: string;
+    write?: string;
+  };
 }
 ```
 
@@ -613,9 +611,13 @@ interface UpdateCollectionStoreDto {
 }
 ```
 
+## Legacy Context-Based Hook (Alternative)
+
+For backward compatibility, the module also exports a context-based hook `usePaktCollectionInternal`. However, the React Query hooks (`useCollections` and `useSchemas`) are recommended for new projects as they provide better caching, synchronization, and state management.
+
 ## PAKT SDK Integration
 
-The module integrates with the PAKT SDK for backend collection management. The SDK handles:
+The module integrates with the PAKT SDK (`@pakt/sdk`) for backend collection management. The SDK handles:
 
 - Collection schema CRUD operations
 - Collection store CRUD operations

@@ -121,6 +121,10 @@ class PaktSDKService {
         return this.config;
     }
 
+    getSDK(): any {
+        return this.sdk;
+    }
+
     // Collection Schema Methods
     async getAllSchemas(
         authToken: string,

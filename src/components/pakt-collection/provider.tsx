@@ -3,6 +3,7 @@
 /* -------------------------------------------------------------------------- */
 
 import { useMemo, ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 /* -------------------------------------------------------------------------- */
 /*                             Internal Dependency                            */
@@ -21,6 +22,17 @@ import {
 } from "./types";
 import { ConfigContextType } from "../../types";
 import "../../styles/index.css";
+
+// Create a QueryClient instance
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            refetchOnWindowFocus: false,
+            retry: 1,
+            staleTime: 5 * 60 * 1000, // 5 minutes
+        },
+    },
+});
 
 interface PaktCollectionProviderProps {
     config: ConfigContextType;
@@ -164,10 +176,12 @@ export const PaktCollectionProvider = ({
     );
 
     return (
-        <ConfigProvider config={config}>
-            <CollectionContext.Provider value={contextValue}>
-                {children}
-            </CollectionContext.Provider>
-        </ConfigProvider>
+        <QueryClientProvider client={queryClient}>
+            <ConfigProvider config={config}>
+                <CollectionContext.Provider value={contextValue}>
+                    {children}
+                </CollectionContext.Provider>
+            </ConfigProvider>
+        </QueryClientProvider>
     );
 };
