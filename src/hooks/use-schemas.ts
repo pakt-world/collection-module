@@ -35,7 +35,6 @@ export function useSchemas() {
                     filter
                 );
             },
-            enabled: !!authToken,
         });
 
     const useSchemaById = (id: string) =>
@@ -45,7 +44,7 @@ export function useSchemas() {
                 const sdk = await getPaktSDK();
                 return await sdk.collectionSchema.getById(authToken || "", id);
             },
-            enabled: !!id && !!authToken,
+            enabled: !!id,
         });
 
     /* -------------------- Mutations -------------------- */

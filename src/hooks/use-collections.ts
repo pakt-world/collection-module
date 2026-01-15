@@ -34,7 +34,7 @@ export function useCollections(schemaReference: string) {
                     filter,
                 });
             },
-            enabled: !!schemaReference && !!authToken,
+            enabled: !!schemaReference,
         });
 
     const getCountQuery = useQuery({
@@ -46,7 +46,7 @@ export function useCollections(schemaReference: string) {
                 schemaReference,
             });
         },
-        enabled: !!schemaReference && !!authToken,
+        enabled: !!schemaReference,
     });
 
     const useCollectionById = (id: string) =>
@@ -60,7 +60,7 @@ export function useCollections(schemaReference: string) {
                     id,
                 });
             },
-            enabled: !!schemaReference && !!id && !!authToken,
+            enabled: !!schemaReference && !!id,
         });
 
     /* -------------------- Mutations -------------------- */
