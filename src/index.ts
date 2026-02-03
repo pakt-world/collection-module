@@ -7,6 +7,9 @@ export { usePaktCollectionInternal } from "./hooks/use-pakt-collection";
 // React Query hooks
 export { useCollections } from "./hooks/use-collections";
 export { useSchemas } from "./hooks/use-schemas";
+export { useWallet } from "./hooks/use-wallet";
+export { useEscrow } from "./hooks/use-escrow";
+export { useFile } from "./hooks/use-file";
 
 // Collection types
 export type {
